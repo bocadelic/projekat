@@ -26,6 +26,8 @@ void processInput(GLFWwindow *window);
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods);
 
+unsigned int loadCubemap(vector<std::string> faces);
+
 // settings
 const unsigned int SCR_WIDTH = 1600;
 const unsigned int SCR_HEIGHT = 1200;
@@ -53,12 +55,12 @@ struct PointLight {
 
 struct ProgramState {
 
+    glm::vec3 dirLightSettings = glm::vec3(0.3f, 0.3f,0.2f);
     glm::vec3 clearColor = glm::vec3(0);
     bool ImGuiEnabled = false;
     Camera camera;
     bool CameraMouseMovementUpdateEnabled = true;
     glm::vec3 backpackPosition = glm::vec3(0.0f);
-    float backpackScale = 1.0f;
     PointLight pointLight;
     ProgramState()
             : camera(glm::vec3(0.0f, 0.0f, 3.0f)) {}
@@ -137,9 +139,6 @@ int main() {
         return -1;
     }
 
-    // tell stb_image.h to flip loaded texture's on the y-axis (before loading model).
-    //stbi_set_flip_vertically_on_load(true);
-
     programState = new ProgramState;
     programState->LoadFromFile("resources/program_state.txt");
     if (programState->ImGuiEnabled) {
@@ -171,12 +170,88 @@ int main() {
 
     // build and compile shaders
     // -------------------------
-    Shader ourShader("resources/shaders/2.model_lighting.vs", "resources/shaders/2.model_lighting.fs");
+    Shader ourShader("resources/shaders/model_lighting.vs", "resources/shaders/model_lighting.fs");
+    Shader skyboxShader("resources/shaders/skybox.vs", "resources/shaders/skybox.fs");
+
 
     // load models
     // -----------
     Model mansionModel("resources/objects/Mansion/export.obj");
     mansionModel.SetShaderTextureNamePrefix("material.");
+
+    //load skybox
+    float skyboxVertices[] = {
+            // positions
+            -1.0f,  1.0f, -1.0f,
+            -1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+
+            -1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f, -1.0f,
+            -1.0f,  1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
+
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+
+            -1.0f, -1.0f,  1.0f,
+            -1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f, -1.0f,  1.0f,
+            -1.0f, -1.0f,  1.0f,
+
+            -1.0f,  1.0f, -1.0f,
+            1.0f,  1.0f, -1.0f,
+            1.0f,  1.0f,  1.0f,
+            1.0f,  1.0f,  1.0f,
+            -1.0f,  1.0f,  1.0f,
+            -1.0f,  1.0f, -1.0f,
+
+            -1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,
+            1.0f, -1.0f, -1.0f,
+            1.0f, -1.0f, -1.0f,
+            -1.0f, -1.0f,  1.0f,
+            1.0f, -1.0f,  1.0f
+    };
+    // skybox VAO
+    unsigned int skyboxVAO, skyboxVBO;
+    glGenVertexArrays(1, &skyboxVAO);
+    glGenBuffers(1, &skyboxVBO);
+    glBindVertexArray(skyboxVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, skyboxVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), &skyboxVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+
+    // load textures
+    // -------------
+    vector<std::string> faces
+            {
+                    FileSystem::getPath("resources/textures/skybox/right.jpg"),
+                    FileSystem::getPath("resources/textures/skybox/left.jpg"),
+                    FileSystem::getPath("resources/textures/skybox/top.jpg"),
+                    FileSystem::getPath("resources/textures/skybox/bottom.jpg"),
+                    FileSystem::getPath("resources/textures/skybox/front.jpg"),
+                    FileSystem::getPath("resources/textures/skybox/back.jpg")
+            };
+    unsigned int cubemapTexture = loadCubemap(faces);
+    // shader configuration
+    // --------------------
+    skyboxShader.use();
+    skyboxShader.setInt("skybox", 0);
+
+
 
     PointLight& pointLight = programState->pointLight;
     pointLight.position = glm::vec3(4.0f, 4.0, 0.0);
@@ -227,9 +302,9 @@ int main() {
         //---------------------------------------Svetla---------------------------------------------------------
         // dirlight
         ourShader.setVec3("dirLight.direction", glm::vec3(-0.5f, -0.7f, 0.4f));
-        ourShader.setVec3("dirLight.ambient", glm::vec3(0.3f));
-        ourShader.setVec3("dirLight.diffuse", glm::vec3(0.3f));
-        ourShader.setVec3("dirLight.specular", glm::vec3(0.2f));
+        ourShader.setVec3("dirLight.ambient", glm::vec3(programState->dirLightSettings.x));
+        ourShader.setVec3("dirLight.diffuse", glm::vec3(programState->dirLightSettings.y));
+        ourShader.setVec3("dirLight.specular", glm::vec3(programState->dirLightSettings.z));
         //pointlight 1
         ourShader.setVec3("pointLights[0].position", glm::vec3(0.0f, 5.0f,0.0f));
         ourShader.setVec3("pointLights[0].ambient", pointLight.ambient);
@@ -249,7 +324,6 @@ int main() {
 
 
         // render the loaded model
-
         //mansion
         glm::mat4 modelMansion = glm::mat4(1.0f);
         modelMansion = glm::translate(modelMansion,glm::vec3(0.0f,-0.5f,0.0f));
@@ -257,8 +331,26 @@ int main() {
         ourShader.setMat4("model", modelMansion);
         mansionModel.Draw(ourShader);
 
+
+
+        // draw skybox as last
+        glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
+        skyboxShader.use();
+        view = glm::mat4(glm::mat3(programState->camera.GetViewMatrix())); // remove translation from the view matrix
+        skyboxShader.setMat4("view", view);
+        skyboxShader.setMat4("projection", projection);
+        // skybox cube
+        glBindVertexArray(skyboxVAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
+        glDepthFunc(GL_LESS); // set depth function back to default
+
+
         if (programState->ImGuiEnabled)
             DrawImGui(programState);
+
 
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
@@ -266,6 +358,9 @@ int main() {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+
+    glDeleteVertexArrays(1, &skyboxVAO);
+    glDeleteBuffers(1, &skyboxVAO);
 
     programState->SaveToFile("resources/program_state.txt");
     delete programState;
@@ -334,14 +429,11 @@ void DrawImGui(ProgramState *programState) {
 
 
     {
-        static float f = 0.0f;
-        ImGui::Begin("Hello window");
-        ImGui::Text("Hello text");
-        ImGui::SliderFloat("Float slider", &f, 0.0, 1.0);
-        ImGui::ColorEdit3("Background color", (float *) &programState->clearColor);
-        ImGui::DragFloat3("Backpack position", (float*)&programState->backpackPosition);
-        ImGui::DragFloat("Backpack scale", &programState->backpackScale, 0.05, 0.1, 4.0);
-
+        ImGui::Begin("Settings");
+        ImGui::Text("Settings");
+        ImGui::Text("Ambient    Diffuse    Specular");
+        ImGui::DragFloat3("Direction light settings", (float*)&programState->dirLightSettings, 0.05, 0.001, 1.0);
+        ImGui::Text("PointLight settings");
         ImGui::DragFloat("pointLight.constant", &programState->pointLight.constant, 0.05, 0.0, 1.0);
         ImGui::DragFloat("pointLight.linear", &programState->pointLight.linear, 0.05, 0.0, 1.0);
         ImGui::DragFloat("pointLight.quadratic", &programState->pointLight.quadratic, 0.05, 0.0, 1.0);
@@ -373,4 +465,33 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
             programState->CameraMouseMovementUpdateEnabled = true;
         }
     }
+}
+unsigned int loadCubemap(vector<std::string> faces)
+{
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+    int width, height, nrChannels;
+    for (unsigned int i = 0; i < faces.size(); i++)
+    {
+        unsigned char *data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
+        if (data)
+        {
+            glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+            stbi_image_free(data);
+        }
+        else
+        {
+            std::cout << "Cubemap texture failed to load at path: " << faces[i] << std::endl;
+            stbi_image_free(data);
+        }
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+    return textureID;
 }
