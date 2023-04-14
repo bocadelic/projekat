@@ -75,6 +75,12 @@ void main()
     for(int i = 0; i < NR_POINT_LIGHTS; i++)
             result += CalcPointLight(pointLights[i], normal, FragPos, viewDir);
     float alpha = texture(material.texture_diffuse1, TexCoords).a;
+
+    float brightness = dot(result, vec3(0.2126, 0.7152, 0.0722));
+    if(brightness > 0.9)
+        BrightColor = vec4(result, 1.0);
+    else
+        BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
     if(alpha<0.1)
         discard;
     else if(alpha <0.9)
