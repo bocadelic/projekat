@@ -325,7 +325,7 @@ int main() {
 
     pointLight.constant = 0.6f;
     pointLight.linear = 0.1f;
-    pointLight.quadratic = 0.002f;
+    pointLight.quadratic = 0.04f;
 
     shaderBlur.use();
     shaderBlur.setInt("image", 0);
